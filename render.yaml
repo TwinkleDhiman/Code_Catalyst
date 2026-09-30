@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: code-catalyst-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+
+  - type: web
+    name: code-catalyst-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
