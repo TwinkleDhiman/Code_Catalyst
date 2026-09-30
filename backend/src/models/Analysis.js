@@ -10,7 +10,7 @@ const analysisSchema = new mongoose.Schema(
     module: {
       type: String,
       required: true,
-      enum: ["technical-debt", "security", "dependency", "architecture"],
+      enum: ["technical-debt", "security", "dependency", "architecture", "full"],
     },
     status: {
       type: String,
@@ -23,6 +23,11 @@ const analysisSchema = new mongoose.Schema(
     score: {
       type: Number,
       default: null,
+    },
+    // Stores summary counts alongside findings for quick dashboard access
+    summary: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
   },
   {

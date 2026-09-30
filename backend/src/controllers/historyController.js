@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const AnalysisHistory = require("../models/AnalysisHistory");
 const { sendSuccess, sendError } = require("../utils/apiResponse");
 
@@ -10,7 +11,11 @@ const getHistory = async (req, res) => {
   try {
     const { projectId } = req.params;
     const filter = { user: req.user.id };
-    if (projectId) {
+
+    if (projectId && projectId !== "undefined" && projectId !== "null") {
+      if (!mongoose.Types.ObjectId.isValid(projectId)) {
+        return res.status(404).json({ success: false, message: "Repository not found." });
+      }
       filter.project = projectId;
     }
 

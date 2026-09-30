@@ -8,8 +8,27 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("p2p_token"));
+  // sessionStorage is automatically cleared when the browser tab/window is closed,
+  // so the user must log in again every new browser session.
+  const [token, setToken] = useState(sessionStorage.getItem("p2p_token"));
   const [loading, setLoading] = useState(true);
+
+  // One-time migration: remove any stale token left in localStorage from before
+  // this update, so existing sessions are invalidated immediately.
+  useEffect(() => {
+    if (localStorage.getItem("p2p_token")) {
+      localStorage.removeItem("p2p_token");
+    }
+  }, []);
+
+  // Belt-and-suspenders: also explicitly clear the session token on tab/window unload.
+  useEffect(() => {
+    const handleUnload = () => {
+      sessionStorage.removeItem("p2p_token");
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, []);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -40,13 +59,13 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = (jwtToken, userData) => {
-    localStorage.setItem("p2p_token", jwtToken);
+    sessionStorage.setItem("p2p_token", jwtToken);
     setToken(jwtToken);
     setUser(userData);
   };
 
   const logout = () => {
-    localStorage.removeItem("p2p_token");
+    sessionStorage.removeItem("p2p_token");
     setToken(null);
     setUser(null);
   };

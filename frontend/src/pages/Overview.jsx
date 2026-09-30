@@ -16,10 +16,9 @@ const Overview = ({ projects, loading, fetchProjects }) => {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     total_projects: 0,
-    avg_score: 0,
-    highest_score: 0,
     language_counts: {},
-    scanned_apis: 0,
+    total_security_issues: 0,
+    total_debt_issues: 0,
   });
   const [loadingStats, setLoadingStats] = useState(true);
 
@@ -33,7 +32,7 @@ const Overview = ({ projects, loading, fetchProjects }) => {
         setStats(data);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Failed to fetch dashboard stats", e);
     } finally {
       setLoadingStats(false);
     }
@@ -46,7 +45,7 @@ const Overview = ({ projects, loading, fetchProjects }) => {
   const handleDelete = async (id, e) => {
     e.stopPropagation();
     e.preventDefault();
-    if (!confirm("Are you sure you want to delete this scan and its reports?"))
+    if (!confirm("Are you sure you want to delete this project and all its analysis data?"))
       return;
     try {
       const res = await fetch(`/api/projects/${id}`, {
@@ -55,32 +54,29 @@ const Overview = ({ projects, loading, fetchProjects }) => {
       });
       if (res.ok) {
         fetchProjects();
+        fetchStats();
       }
     } catch (e) {
-      console.error(e);
+      console.error("Failed to delete project", e);
     }
   };
 
   const kpis = [
-    { label: "Total Analyzed", value: stats.total_projects ?? 0 },
-    { label: "Avg Potential Score", value: `${stats.avg_score ?? 0}/100` },
-    { label: "Total APIs Found", value: stats.scanned_apis ?? 0 },
+    { label: "Total Projects", value: stats.total_projects ?? 0 },
+    { label: "Security Findings", value: stats.total_security_issues ?? 0 },
+    { label: "Debt Issues", value: stats.total_debt_issues ?? 0 },
     {
-      label: "Highest Product Score",
-      value: `${stats.highest_score ?? 0}/100`,
+      label: "Languages Detected",
+      value: Object.keys(stats.language_counts || {}).length,
     },
   ];
 
-  const chartData = projects
-    .slice()
-    .reverse()
-    .map((p) => ({
-      name: p.name.length > 15 ? p.name.substring(0, 12) + "..." : p.name,
-      score: p.potential_score,
-      fullName: p.name,
-    }));
-
   const colors = ["#8b5cf6", "#a78bfa", "#6366f1", "#4f46e5", "#4338ca"];
+
+  const chartData = Object.entries(stats.language_counts || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([lang, count]) => ({ name: lang, count }));
 
   return (
     <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
@@ -90,18 +86,19 @@ const Overview = ({ projects, loading, fetchProjects }) => {
             Console Overview
           </h1>
           <p className="text-sm text-gray-400 font-medium mt-1">
-            Review aggregated project statistics, product readiness levels, and
-            code scans.
+            Review aggregated project statistics, static analysis results, and
+            code health metrics.
           </p>
         </div>
         <Link
           to="/dashboard/upload"
           className="px-5 py-2.5 text-xs font-bold bg-primary-600 hover:bg-primary-700 text-white rounded-xl shadow-lg shadow-primary-500/10 hover:shadow-primary-500/25 transition-all flex items-center gap-1.5"
         >
-          Scan New Project
+          Analyze New Project
         </Link>
       </div>
 
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {kpis.map((kpi, idx) => (
           <div
@@ -118,15 +115,14 @@ const Overview = ({ projects, loading, fetchProjects }) => {
         ))}
       </div>
 
-      {projects.length > 0 && (
+      {/* Charts — only show when there are projects */}
+      {projects.length > 0 && Object.keys(stats.language_counts || {}).length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="glass-panel rounded-3xl p-6 border border-gray-900 lg:col-span-2 flex flex-col justify-between">
             <div className="mb-6">
-              <h3 className="font-bold text-base">
-                Product Potential Comparison
-              </h3>
+              <h3 className="font-bold text-base">Language Distribution</h3>
               <p className="text-xs text-gray-400">
-                Compares overall scoring ranges across scanned repositories.
+                File counts by detected programming language across all projects.
               </p>
             </div>
             <div className="h-60 w-full">
@@ -141,32 +137,19 @@ const Overview = ({ projects, loading, fetchProjects }) => {
                     fontSize={10}
                     tickLine={false}
                   />
-                  <YAxis
-                    domain={[0, 100]}
-                    stroke="#64748b"
-                    fontSize={10}
-                    tickLine={false}
-                  />
+                  <YAxis stroke="#64748b" fontSize={10} tickLine={false} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#0f172a",
                       borderColor: "#1e293b",
                       borderRadius: "12px",
                     }}
-                    labelStyle={{
-                      color: "#fff",
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                    }}
+                    labelStyle={{ color: "#fff", fontSize: "12px", fontWeight: "bold" }}
                     itemStyle={{ color: "#a78bfa", fontSize: "11px" }}
                   />
-
-                  <Bar dataKey="score" radius={[8, 8, 0, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={colors[index % colors.length]}
-                      />
+                  <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                    {chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -176,58 +159,53 @@ const Overview = ({ projects, loading, fetchProjects }) => {
 
           <div className="glass-panel rounded-3xl p-6 border border-gray-900 flex flex-col justify-between">
             <div className="mb-6">
-              <h3 className="font-bold text-base">Scanned Languages</h3>
+              <h3 className="font-bold text-base">Detected Languages</h3>
               <p className="text-xs text-gray-400">
-                Total lines/file proportions of scanned code formats.
+                File proportions by language across scanned repositories.
               </p>
             </div>
             <div className="space-y-4 flex-1 overflow-y-auto pr-1">
-              {Object.keys(stats.language_counts).length === 0 ? (
-                <div className="text-xs text-gray-500 italic text-center py-12">
-                  No files scanned yet
-                </div>
-              ) : (
-                Object.entries(stats.language_counts)
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 5)
-                  .map(([lang, count], idx) => {
-                    const total = Object.values(stats.language_counts).reduce(
-                      (s, c) => s + c,
-                      0,
-                    );
-                    const percent = Math.round((count / total) * 100);
-                    return (
-                      <div key={lang} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs font-semibold">
-                          <span className="text-gray-300">{lang}</span>
-                          <span className="text-gray-400">
-                            {count} files ({percent}%)
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-950/60 border border-gray-900/60 h-2 rounded-full overflow-hidden">
-                          <div
-                            className="bg-primary-500 h-full rounded-full"
-                            style={{
-                              width: `${percent}%`,
-                              backgroundColor: colors[idx % colors.length],
-                            }}
-                          ></div>
-                        </div>
+              {Object.entries(stats.language_counts || {})
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([lang, count], idx) => {
+                  const total = Object.values(stats.language_counts).reduce(
+                    (s, c) => s + c,
+                    0
+                  );
+                  const percent = Math.round((count / total) * 100);
+                  return (
+                    <div key={lang} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs font-semibold">
+                        <span className="text-gray-300">{lang}</span>
+                        <span className="text-gray-400">
+                          {count} files ({percent}%)
+                        </span>
                       </div>
-                    );
-                  })
-              )}
+                      <div className="w-full bg-gray-950/60 border border-gray-900/60 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${percent}%`,
+                            backgroundColor: colors[idx % colors.length],
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
       )}
 
+      {/* Projects Table */}
       <div className="glass-panel rounded-3xl border border-gray-900 overflow-hidden shadow-2xl">
         <div className="p-6 border-b border-gray-900 flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-base">Scan Repositories</h3>
+            <h3 className="font-bold text-base">Analyzed Repositories</h3>
             <p className="text-xs text-gray-400">
-              Select any project to explore full SaaS opportunity roadmaps.
+              Click a project to view its security and technical debt findings.
             </p>
           </div>
           <button
@@ -235,9 +213,11 @@ const Overview = ({ projects, loading, fetchProjects }) => {
               fetchProjects();
               fetchStats();
             }}
-            className="p-2 bg-gray-900 border border-gray-800 rounded-xl hover:border-primary-500 text-gray-400 hover:text-white transition-colors"
-            title="Refresh Scan List"
-          ></button>
+            className="p-2 px-4 bg-gray-900 border border-gray-800 rounded-xl hover:border-primary-500 text-gray-400 hover:text-white transition-colors text-xs font-semibold"
+            title="Refresh"
+          >
+            Refresh
+          </button>
         </div>
 
         {loading ? (
@@ -247,7 +227,7 @@ const Overview = ({ projects, loading, fetchProjects }) => {
         ) : projects.length === 0 ? (
           <div className="p-16 text-center space-y-4">
             <p className="text-xs text-gray-500 italic">
-              No codebase scans registered in database.
+              No projects analyzed yet.
             </p>
             <Link
               to="/dashboard/upload"
@@ -262,9 +242,9 @@ const Overview = ({ projects, loading, fetchProjects }) => {
               <thead>
                 <tr className="border-b border-gray-900 bg-gray-950/30 text-gray-400 font-bold uppercase tracking-wider">
                   <th className="py-4 px-6">Project Name</th>
-                  <th className="py-4 px-6">Domain Type</th>
-                  <th className="py-4 px-6 text-center">Modules</th>
-                  <th className="py-4 px-6 text-center">Product Readiness</th>
+                  <th className="py-4 px-6">Type</th>
+                  <th className="py-4 px-6 text-center">Files</th>
+                  <th className="py-4 px-6 text-center">Analysis Status</th>
                   <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
               </thead>
@@ -272,36 +252,43 @@ const Overview = ({ projects, loading, fetchProjects }) => {
                 {projects.map((project) => (
                   <tr
                     key={project.id}
-                    onClick={() =>
-                      navigate(`/dashboard/recommendations/${project.id}`)
-                    }
+                    onClick={() => navigate(`/dashboard/security/${project.id}`)}
                     className="border-b border-gray-900 hover:bg-gray-900/10 cursor-pointer transition-colors"
                   >
                     <td className="py-4 px-6 font-semibold">
                       <div className="space-y-0.5">
-                        <div className="text-gray-100 flex items-center gap-1.5">
-                          {project.name}
-                        </div>
+                        <div className="text-gray-100">{project.name}</div>
                         <div className="text-[10px] text-gray-500">
-                          {project.file_count} files in {project.folder_count}{" "}
-                          folders
+                          {project.file_count > 0
+                            ? `${project.file_count} files in ${project.folder_count} folders`
+                            : project.gitUrl
+                            ? project.gitUrl.replace("https://github.com/", "")
+                            : "Uploaded ZIP"}
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 px-6 text-gray-300 font-medium">
-                      {project.domain}
+                    <td className="py-4 px-6 text-gray-300 font-medium capitalize">
+                      {project.uploadType === "git" ? "GitHub URL" : "ZIP Upload"}
                     </td>
-                    <td className="py-4 px-6 text-center text-gray-400 font-mono font-medium">
-                      {project.languages
-                        ? Object.keys(project.languages).slice(0, 2).join(", ")
-                        : "N/A"}
+                    <td className="py-4 px-6 text-center text-gray-400 font-mono">
+                      {project.file_count || "—"}
                     </td>
                     <td className="py-4 px-6">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center">
                         <span
-                          className={`px-2 py-1 rounded-full text-[10px] font-bold ${project.potential_score >= 80 ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900/40" : project.potential_score >= 60 ? "bg-amber-950/40 text-amber-400 border border-amber-900/40" : "bg-gray-900 text-gray-400 border border-gray-800"}`}
+                          className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                            project.analysisStatus === "completed"
+                              ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900/40"
+                              : project.analysisStatus === "failed"
+                              ? "bg-red-950/40 text-red-400 border border-red-900/40"
+                              : "bg-gray-900 text-gray-400 border border-gray-800"
+                          }`}
                         >
-                          {project.potential_score}/100
+                          {project.analysisStatus === "completed"
+                            ? "Analyzed"
+                            : project.analysisStatus === "failed"
+                            ? "Failed"
+                            : "Pending ZIP"}
                         </span>
                       </div>
                     </td>
@@ -311,9 +298,11 @@ const Overview = ({ projects, loading, fetchProjects }) => {
                     >
                       <button
                         onClick={(e) => handleDelete(project.id, e)}
-                        className="p-2 rounded-lg bg-gray-900 hover:bg-red-950/30 text-gray-500 hover:text-red-400 border border-gray-800 hover:border-red-900/40 transition-colors"
+                        className="p-2 px-3 rounded-lg bg-gray-900 hover:bg-red-950/30 text-gray-500 hover:text-red-400 border border-gray-800 hover:border-red-900/40 transition-colors text-xs font-bold"
                         title="Delete project"
-                      ></button>
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}

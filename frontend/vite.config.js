@@ -12,7 +12,5 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
-  }
+  },
 })
-import dns from 'dns'
-dns.setDefaultResultOrder('verbatim')

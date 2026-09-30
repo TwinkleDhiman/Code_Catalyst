@@ -42,6 +42,17 @@ const projectSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Detected programming languages and file counts
+    languages: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    // Tracks whether the ZIP has been fully analyzed
+    analysisStatus: {
+      type: String,
+      enum: ["none", "completed", "failed"],
+      default: "none",
+    },
   },
   {
     timestamps: true,

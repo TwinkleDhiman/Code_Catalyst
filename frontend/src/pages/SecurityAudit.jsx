@@ -10,23 +10,27 @@ const SecurityAudit = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchAudit = async () => {
-      if (!id) return;
+      setAuditData(null);
+      setLoading(true);
+      const url = id ? `/api/security/${id}` : "/api/security/undefined";
       try {
-        const res = await fetch(`/api/security/${id}`, {
+        const res = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
-          const data = await res.json();
-          setAuditData(data.data?.securityAudit || data.securityAudit || null);
+          const json = await res.json();
+          if (isMounted) setAuditData(json);
         }
       } catch (e) {
         console.error("Failed to fetch security audit", e);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchAudit();
+    return () => { isMounted = false; };
   }, [id, token]);
 
   if (loading) {
@@ -37,8 +41,11 @@ const SecurityAudit = () => {
     );
   }
 
-  const score = auditData?.securityScore ?? 100;
-  const findings = auditData?.findings || [];
+  const hasProject = auditData?.hasProject !== false;
+  const auditInfo = auditData?.data?.securityAudit || auditData?.securityAudit || auditData || {};
+  const score = auditInfo?.securityScore ?? 100;
+  const findings = auditInfo?.findings || [];
+  const message = auditData?.data?.message || auditData?.message;
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -56,7 +63,21 @@ const SecurityAudit = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {!hasProject ? (
+        <div className="glass-panel border border-gray-900 rounded-3xl p-12 flex flex-col items-center justify-center text-center space-y-4">
+          <svg className="w-16 h-16 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+          </svg>
+          <h2 className="text-xl font-bold text-gray-300">
+            No Repository Uploaded
+          </h2>
+          <p className="text-sm text-gray-500 max-w-md">
+            {message || "Upload a repository ZIP file to run security scanning."}
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="glass-card rounded-2xl p-6 border border-gray-800">
           <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">
             Security Score
@@ -82,7 +103,7 @@ const SecurityAudit = () => {
             Critical Vulnerabilities
           </span>
           <div className="mt-2 text-3xl font-extrabold text-red-400">
-            {auditData ? auditData.criticalCount : 0}
+            {auditInfo.criticalCount ?? 0}
           </div>
         </div>
 
@@ -91,7 +112,7 @@ const SecurityAudit = () => {
             High Risk Triggers
           </span>
           <div className="mt-2 text-3xl font-extrabold text-orange-400">
-            {auditData ? auditData.highCount : 0}
+            {auditInfo.highCount ?? 0}
           </div>
         </div>
 
@@ -100,7 +121,7 @@ const SecurityAudit = () => {
             Medium / Low Risks
           </span>
           <div className="mt-2 text-3xl font-extrabold text-yellow-400">
-            {auditData ? auditData.mediumCount : 0}
+            {auditInfo.mediumCount ?? 0}
           </div>
         </div>
       </div>
@@ -163,6 +184,8 @@ const SecurityAudit = () => {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };
